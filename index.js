@@ -1,4 +1,3 @@
-// server/index.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -11,51 +10,52 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        // origin: "http://localhost:5173", // React dev server
-        origin: "*", // React dev server
+        origin: "*",
         methods: ["GET", "POST"],
     },
 });
 
-io.on("connection", (socket) => {
-    console.log("New client connected:", socket.id);
+const onlineUsers = {}; // socket.id -> name
 
-    // When someone joins room with name
+io.on("connection", (socket) => {
+    console.log("User connected:", socket.id);
+
     socket.on("joinRoom", (name) => {
         socket.userName = name;
-        console.log(`${name} joined the room`);
+        onlineUsers[socket.id] = name;
 
-        // Notify others
-        socket.broadcast.emit("roomNotice", name);
+        // send updated online users list to everyone
+        io.emit("onlineUsers", Object.values(onlineUsers));
+
+        // notice message to others
+        socket.broadcast.emit("roomNotice", `${name} joined the chat`);
     });
 
-    // Handle chat message
+    // broadcast chat message to others
     socket.on("chatMessage", (msg) => {
-        console.log("Message received:", msg);
-
-        // Send message to others (NOT sender)
         socket.broadcast.emit("chatMessage", msg);
     });
 
-    // Typing events
-    socket.on("typing", (userName) => {
-        socket.broadcast.emit("typing", userName);
-    });
-
-    socket.on("stopTyping", (userName) => {
-        socket.broadcast.emit("stopTyping", userName);
+    // user is marking messages as read
+    socket.on("markRead", (messageIds) => {
+        // broadcast to all others that these ids are read
+        socket.broadcast.emit("messageRead", { messageIds });
     });
 
     socket.on("disconnect", () => {
-        console.log("Client disconnected:", socket.id);
-        if (socket.userName) {
-            // optional: notify leave
-            // socket.broadcast.emit("roomNotice", `${socket.userName} left the chat`);
+        const name = socket.userName;
+        delete onlineUsers[socket.id];
+        io.emit("onlineUsers", Object.values(onlineUsers));
+
+        if (name) {
+            socket.broadcast.emit("roomNotice", `${name} left the chat`);
         }
+
+        console.log("User disconnected:", socket.id);
     });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Socket.io server running on http://localhost:${PORT}`);
+    console.log(`Socket.io server running on port ${PORT}`);
 });
