@@ -11,7 +11,8 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:5173", // React dev server
+        // origin: "http://localhost:5173", // React dev server
+        origin: "*", // React dev server
         methods: ["GET", "POST"],
     },
 });
